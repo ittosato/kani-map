@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>簡易局マップ｜防災情報システム</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy:#0d1b2a;--cyan:#00acc1;--gray:#78909c;
+  --panel:rgba(10,20,35,0.97);--border:rgba(0,172,193,0.22);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;overflow:hidden;font-family:'Noto Sans JP',sans-serif;background:var(--navy);}
+
+/* ── HEADER ── */
+header{
+  position:fixed;top:0;left:0;right:0;height:52px;
+  display:flex;align-items:center;gap:10px;padding:0 16px;
+  background:rgba(8,16,28,0.97);border-bottom:1px solid var(--border);
+  z-index:1000;
+}
+#menuBtn{
+  display:none;background:rgba(0,172,193,.15);
+  border:1px solid rgba(0,172,193,.4);border-radius:7px;
+  width:34px;height:34px;align-items:center;justify-content:center;
+  cursor:pointer;flex-shrink:0;font-size:16px;color:var(--cyan);
+}
+.logo{width:32px;height:32px;background:var(--cyan);border-radius:7px;
+  display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;}
+.htitle{font-size:14px;font-weight:700;color:#fff;letter-spacing:.04em;}
+.hsub{font-size:10px;color:var(--gray);}
+.hbadge{
+  margin-left:auto;background:rgba(0,172,193,.13);
+  border:1px solid var(--cyan);color:var(--cyan);
+  font-size:11px;padding:3px 10px;border-radius:20px;
+  font-family:'Inter',sans-serif;font-weight:600;white-space:nowrap;
+}
+
+/* ── LAYOUT ── */
+.layout{display:flex;height:100%;padding-top:52px;}
+
+/* ── SIDEBAR ── */
+.sidebar{
+  width:300px;flex-shrink:0;
+  background:var(--panel);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;overflow:hidden;z-index:900;
+}
+.sb-search{padding:12px 14px 8px;border-bottom:1px solid rgba(255,255,255,.06);display:flex;gap:8px;align-items:center;}
+.sb-search input{
+  flex:1;background:rgba(255,255,255,.07);
+  border:1px solid rgba(0,172,193,.28);border-radius:8px;
+  padding:8px 12px;color:#fff;font-family:'Noto Sans JP',sans-serif;
+  font-size:12px;outline:none;transition:border .2s;
+}
+.sb-search input:focus{border-color:var(--cyan);}
+.sb-search input::placeholder{color:var(--gray);}
+#sbCloseBtn{
+  display:none;flex-shrink:0;background:none;
+  border:1px solid rgba(255,255,255,.15);border-radius:6px;
+  color:var(--gray);font-size:16px;padding:4px 8px;cursor:pointer;
+}
+.sb-list{flex:1;overflow-y:auto;padding:4px 0;}
+.sb-list::-webkit-scrollbar{width:3px;}
+.sb-list::-webkit-scrollbar-thumb{background:rgba(0,172,193,.3);border-radius:2px;}
+.sb-item{padding:8px 14px;cursor:pointer;border-left:3px solid transparent;transition:all .15s;}
+.sb-item:hover{background:rgba(0,172,193,.07);border-left-color:var(--cyan);}
+.sb-item.active{background:rgba(0,172,193,.13);border-left-color:var(--cyan);}
+.iname{font-size:12px;font-weight:500;color:#fff;}
+.iaddr{font-size:10px;color:var(--gray);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sb-empty{padding:24px 14px;color:var(--gray);font-size:12px;text-align:center;}
+
+/* ── MAP ── */
+.map-wrap{flex:1;position:relative;overflow:hidden;}
+#map{width:100%;height:100%;}
+
+/* ── HAZARD PANEL ── */
+.hazard-panel{
+  position:absolute;top:14px;right:14px;
+  background:var(--panel);border:1px solid var(--border);
+  border-radius:12px;padding:12px 13px;z-index:800;
+  min-width:188px;box-shadow:0 4px 24px rgba(0,0,0,.4);
+}
+.hazard-panel h3{font-size:10px;color:var(--cyan);letter-spacing:.1em;text-transform:uppercase;margin-bottom:9px;font-weight:600;}
+.hbtn{
+  display:flex;align-items:center;gap:8px;width:100%;
+  padding:7px 10px;margin-bottom:5px;
+  background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);
+  border-radius:7px;color:#fff;font-family:'Noto Sans JP',sans-serif;
+  font-size:12px;cursor:pointer;transition:all .18s;text-align:left;
+}
+.hbtn:last-child{margin-bottom:0;}
+.hbtn:hover{background:rgba(0,172,193,.12);border-color:var(--cyan);}
+.hbtn.active{background:rgba(0,172,193,.22);border-color:var(--cyan);color:var(--cyan);}
+
+/* ── INFO CARD ── */
+.info-card{
+  position:absolute;bottom:20px;left:50%;transform:translateX(-50%);
+  background:var(--panel);border:1px solid var(--cyan);
+  border-radius:14px;padding:16px 18px 14px;
+  min-width:270px;max-width:420px;z-index:800;
+  box-shadow:0 8px 40px rgba(0,172,193,.18);
+  display:none;animation:slideUp .22s ease;
+}
+.info-card.show{display:block;}
+@keyframes slideUp{from{opacity:0;transform:translateX(-50%) translateY(12px);}to{opacity:1;transform:translateX(-50%) translateY(0);}}
+.card-close{position:absolute;top:10px;right:12px;background:none;border:none;color:var(--gray);cursor:pointer;font-size:18px;}
+.card-close:hover{color:#fff;}
+.card-hd{display:flex;align-items:center;gap:10px;margin-bottom:11px;}
+.card-ico{width:34px;height:34px;background:var(--cyan);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;}
+.card-name{font-size:15px;font-weight:700;color:#fff;}
+.card-row{display:flex;gap:8px;font-size:11px;margin-bottom:5px;align-items:flex-start;}
+.card-lbl{color:var(--cyan);font-weight:500;min-width:36px;flex-shrink:0;}
+.card-val{color:#b0bec5;line-height:1.5;}
+.card-actions{display:flex;gap:7px;margin-top:12px;}
+.cbtn{
+  flex:1;padding:9px 6px;border-radius:8px;border:none;
+  font-family:'Noto Sans JP',sans-serif;font-size:11px;
+  cursor:pointer;font-weight:500;transition:opacity .18s;
+}
+.cbtn:hover{opacity:.82;}
+.cbtn.primary{background:var(--cyan);color:var(--navy);}
+.cbtn.secondary{background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.18);}
+
+/* ── PASSWORD SCREEN ── */
+.pw-screen{
+  position:fixed;inset:0;background:var(--navy);
+  display:flex;align-items:center;justify-content:center;
+  z-index:9999;padding:20px;
+}
+.pw-screen.gone{display:none;}
+.pw-box{
+  background:rgba(255,255,255,.05);border:1px solid rgba(0,172,193,.4);
+  border-radius:18px;padding:36px 32px;max-width:400px;width:100%;text-align:center;
+}
+.pw-box .pw-icon{font-size:44px;margin-bottom:14px;}
+.pw-box h2{font-size:18px;font-weight:700;color:#fff;margin-bottom:8px;}
+.pw-box p{font-size:12px;color:var(--gray);margin-bottom:22px;line-height:1.7;}
+.pw-box input{
+  width:100%;background:rgba(255,255,255,.07);
+  border:1px solid rgba(0,172,193,.4);border-radius:9px;
+  padding:11px 16px;color:#fff;font-size:16px;
+  letter-spacing:.2em;font-family:'Inter',sans-serif;
+  outline:none;margin-bottom:10px;text-align:center;
+}
+.pw-box input:focus{border-color:var(--cyan);}
+.pw-box input::placeholder{letter-spacing:normal;font-size:13px;}
+.pw-btn{
+  width:100%;padding:12px;background:var(--cyan);border:none;
+  border-radius:9px;color:var(--navy);font-weight:700;font-size:15px;
+  cursor:pointer;font-family:'Noto Sans JP',sans-serif;transition:opacity .2s;margin-bottom:8px;
+}
+.pw-btn:hover{opacity:.85;}
+.pw-err{color:#ef5350;font-size:12px;min-height:18px;}
+.pw-attempts{color:var(--gray);font-size:10px;margin-top:4px;}
+
+/* ── Leaflet カスタム ── */
+.leaflet-tooltip-custom{
+  background:rgba(10,20,35,0.95)!important;border:1px solid var(--cyan)!important;
+  color:#cfd8dc!important;font-family:'Noto Sans JP',sans-serif!important;
+  font-size:12px!important;border-radius:8px!important;
+  padding:7px 10px!important;box-shadow:0 4px 16px rgba(0,172,193,.2)!important;
+  line-height:1.6!important;
+}
+.leaflet-tooltip-custom::before{border-top-color:var(--cyan)!important;}
+.leaflet-control-zoom{border:1px solid rgba(0,172,193,.3)!important;}
+.leaflet-control-zoom a{background:rgba(10,20,35,.95)!important;color:var(--cyan)!important;border-bottom:1px solid rgba(0,172,193,.2)!important;}
+.leaflet-control-zoom a:hover{background:rgba(0,172,193,.15)!important;}
+
+/* ── MOBILE ── */
+@media(max-width:768px){
+  header{padding:0 12px;height:48px;gap:8px;}
+  .htitle{font-size:13px;} .hsub{display:none;}
+  .hbadge{font-size:10px;padding:2px 8px;}
+  #menuBtn{display:flex!important;}
+  .layout{flex-direction:column;padding-top:48px;}
+  .sidebar{
+    position:fixed;top:48px;left:0;right:0;bottom:0;
+    width:100%;z-index:950;
+    transform:translateX(-100%);transition:transform .25s ease;
+  }
+  .sidebar.open{transform:translateX(0);}
+  .map-wrap{width:100%;height:calc(100vh - 48px);}
+  .hazard-panel{
+    top:auto;bottom:0;left:0;right:0;
+    border-radius:0;border-left:none;border-right:none;border-bottom:none;
+    min-width:unset;padding:8px 10px 12px;
+    display:flex;flex-direction:row;align-items:center;
+    gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;
+  }
+  .hazard-panel::-webkit-scrollbar{display:none;}
+  .hazard-panel h3{display:none;}
+  .hbtn{flex-shrink:0;white-space:nowrap;padding:6px 12px;font-size:11px;margin-bottom:0;}
+  .info-card{
+    bottom:56px;left:8px;right:8px;
+    transform:none;min-width:unset;max-width:unset;
+    border-radius:14px;padding:14px 14px 10px;
+  }
+  @keyframes slideUp{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:translateY(0);}}
+  #sbOverlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:940;top:48px;}
+  #sbOverlay.show{display:block;}
+  #sbCloseBtn{display:block!important;}
+}
+@media(min-width:769px){
+  #menuBtn{display:none!important;}
+  #sbOverlay{display:none!important;}
+}
+</style>
+</head>
+<body>
+
+<!-- パスワード画面 -->
+<div class="pw-screen" id="pwScreen">
+  <div class="pw-box">
+    <div class="pw-icon">🔐</div>
+    <h2>簡易局マップ</h2>
+    <p>このシステムは社内専用です。<br>パスワードを入力してください。</p>
+    <input type="password" id="pwInput" placeholder="パスワードを入力" autocomplete="off"
+      onkeydown="if(event.key==='Enter')checkPw()">
+    <button class="pw-btn" onclick="checkPw()">ログイン</button>
+    <div class="pw-err" id="pwErr"></div>
+    <div class="pw-attempts" id="pwAttempts"></div>
+  </div>
+</div>
+
+<header>
+  <button id="menuBtn" onclick="toggleSidebar()">☰</button>
+  <div class="logo">📍</div>
+  <div><div class="htitle">簡易局マップ</div><div class="hsub">防災情報システム</div></div>
+  <span class="hbadge" id="badgeCount">248 局</span>
+</header>
+
+<div class="layout">
+  <div id="sbOverlay" onclick="toggleSidebar()"></div>
+  <aside class="sidebar" id="sidebar">
+    <div class="sb-search">
+      <input type="text" id="searchInput" placeholder="🔍 名前・住所・郵便番号で検索" oninput="filterList(this.value)">
+      <button id="sbCloseBtn" onclick="toggleSidebar()">✕</button>
+    </div>
+    <div class="sb-list" id="sbList"></div>
+  </aside>
+
+  <div class="map-wrap">
+    <div id="map"></div>
+
+    <!-- ハザードマップ -->
+    <div class="hazard-panel">
+      <h3>🛡 ハザードマップ</h3>
+      <button class="hbtn" id="hbtn-tsunami"   onclick="toggleHazard('tsunami')"  ><span>🌊</span>津波</button>
+      <button class="hbtn" id="hbtn-flood"     onclick="toggleHazard('flood')"    ><span>🌧</span>洪水・河川氾濫</button>
+      <button class="hbtn" id="hbtn-landslide" onclick="toggleHazard('landslide')"><span>⛰</span>土砂災害</button>
+      <button class="hbtn" id="hbtn-volcano"   onclick="toggleHazard('volcano')"  ><span>🌋</span>火山 <span style="font-size:9px;opacity:.7;margin-left:auto">外部↗</span></button>
+      <button class="hbtn" id="hbtn-none"      onclick="toggleHazard('none')"     ><span>🗺</span>標準に戻す</button>
+    </div>
+
+    <!-- 情報カード -->
+    <div class="info-card" id="infoCard">
+      <button class="card-close" onclick="closeCard()">✕</button>
+      <div class="card-hd">
+        <div class="card-ico">📮</div>
+        <div class="card-name" id="cName"></div>
+      </div>
+      <div class="card-row"><span class="card-lbl">住所</span><span class="card-val" id="cAddr"></span></div>
+      <div class="card-row"><span class="card-lbl">郵便</span><span class="card-val" id="cPost"></span></div>
+      <div class="card-row"><span class="card-lbl">電話</span><span class="card-val" id="cPhone"></span></div>
+      <div class="card-actions">
+        <button class="cbtn primary"   onclick="openOSM()">🗺 地図で開く</button>
+        <button class="cbtn secondary" onclick="closeCard()">✕ 閉じる</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════
+//  データ
+// ════════════════════════════════════════
+const RECORDS=[{"name":"日高泉","phone":"080-9893-0563","postal":"059-2423","address":"北海道新冠郡新冠町字泉２９－５"},{"name":"石狩滝ノ上","phone":"080-9893-0564","postal":"068-0756","address":"北海道夕張市滝ノ上１０番地２０"},{"name":"仲洞爺","phone":"080-9893-0565","postal":"052-0105","address":"北海道有珠郡壮瞥町字仲洞爺１３"},{"name":"入江","phone":"080-9893-0567","postal":"049-5603","address":"北海道虻田郡洞爺湖町入江３８番３"},{"name":"太陽","phone":"080-9893-0568","postal":"059-2343","address":"北海道新冠郡新冠町字太陽２０４－１６"},{"name":"藤野沢","phone":"080-9893-0569","postal":"061-2283","address":"北海道札幌市南区藤野３条３丁目１番１５号"},{"name":"日高朝日","phone":"080-9893-0570","postal":"059-2414","address":"北海道新冠郡新冠町字朝日２８３番地"},{"name":"豊幌","phone":"080-9893-0571","postal":"067-0027","address":"北海道江別市豊幌美咲町１８番地の２"},{"name":"西幌別","phone":"080-9893-0572","postal":"057-0002","address":"北海道浦河郡浦河町字西幌別２７３"},{"name":"六郷","phone":"080-9893-0573","postal":"044-0004","address":"北海道虻田郡倶知安町北４条東７丁目"},{"name":"発寒","phone":"080-9893-0574","postal":"006-0803","address":"北海道札幌市手稲区新発寒３条４－３－８"},{"name":"岩内大浜","phone":"080-9893-0575","postal":"045-0001","address":"北海道岩内郡岩内町字大浜１２番５"},{"name":"舞鶴","phone":"080-9893-0578","postal":"069-1454","address":"北海道夕張郡長沼町東４線南１２番地"},{"name":"ニセコ駅前","phone":"080-9893-0579","postal":"048-1512","address":"北海道虻田郡ニセコ町字中央通８０番地"},{"name":"後志豊浜","phone":"080-9893-0580","postal":"048-0612","address":"北海道島牧郡島牧村字豊浜９０番地２"},{"name":"江別太","phone":"080-9893-0583","postal":"067-0023","address":"北海道江別市東光町１２－８"},{"name":"後志港町","phone":"080-9893-0584","postal":"048-1341","address":"北海道磯谷郡蘭越町港町６１９"},{"name":"浦河東町","phone":"080-9893-0586","postal":"057-0007","address":"北海道浦河郡浦河町東町ちのみ１－１－１"},{"name":"樽前","phone":"080-9893-0587","postal":"059-1265","address":"北海道苫小牧市字樽前９９番地の４"},{"name":"島牧元町","phone":"080-9893-0588","postal":"048-0632","address":"北海道島牧郡島牧村字元町１６５"},{"name":"舟岡","phone":"080-9893-0589","postal":"052-0014","address":"北海道伊達市舟岡町２９番地６３"},{"name":"オタモイ","phone":"080-9893-0590","postal":"048-2671","address":"北海道小樽市オタモイ１丁目２０番３号"},{"name":"農業試験場前","phone":"080-9893-0591","postal":"069-1317","address":"北海道夕張郡長沼町東５線北１５番地"},{"name":"西山手","phone":"080-9893-0592","postal":"053-0854","address":"北海道苫小牧市啓北町１丁目１４番１５号"},{"name":"東野幌","phone":"080-9893-0593","postal":"069-0821","address":"北海道江別市東野幌町３９番地の１"},{"name":"共和","phone":"080-9893-0594","postal":"048-2202","address":"北海道岩内郡共和町南幌似３０－１８"},{"name":"島牧栄浜","phone":"080-9893-0595","postal":"048-0634","address":"北海道島牧郡島牧村字栄浜３６９番地３"},{"name":"東米里","phone":"080-9893-0596","postal":"003-0876","address":"北海道札幌市白石区東米里２１２４番地２３"},{"name":"手稲稲穂中","phone":"080-9893-0598","postal":"006-0032","address":"北海道札幌市手稲区稲穂２条４丁目１番５号"},{"name":"石狩大曲","phone":"080-9893-0599","postal":"061-1275","address":"北海道北広島市大曲南ケ丘１丁目５番地１"},{"name":"岩内東山","phone":"080-9893-0600","postal":"045-0002","address":"北海道岩内郡岩内町東山２２－１"},{"name":"円山西町","phone":"080-9893-0601","postal":"064-0944","address":"北海道札幌市中央区円山西町３－３－１"},{"name":"富岸","phone":"080-9893-0602","postal":"059-0033","address":"北海道登別市栄町二丁目２０番２"},{"name":"札幌荒井山","phone":"080-9893-0604","postal":"064-0953","address":"北海道札幌市中央区宮の森３条１３－５－１８"},{"name":"上江別","phone":"080-9893-0605","postal":"067-0062","address":"北海道江別市上江別南町１－３"},{"name":"静内青柳","phone":"080-9893-0606","postal":"056-0019","address":"北海道日高郡新ひだか町静内青柳町３－１２－１３"},{"name":"白石川北","phone":"080-9893-0607","postal":"003-0852","address":"北海道札幌市白石区川北２条２－４－１"},{"name":"平取二風谷","phone":"080-9893-0608","postal":"055-0101","address":"北海道沙流郡平取町二風谷７４－６"},{"name":"北湯沢","phone":"080-9893-0609","postal":"052-0316","address":"北海道伊達市大滝区北湯沢温泉町無番地"},{"name":"白老栄町","phone":"080-9893-0610","postal":"059-0914","address":"北海道白老郡白老町栄町１丁目１０番１号"},{"name":"白石北郷八条","phone":"080-9893-0613","postal":"003-0838","address":"北海道札幌市白石区北郷８条７丁目７番２０号"},{"name":"恵庭柏陽","phone":"080-9893-0614","postal":"061-1434","address":"北海道恵庭市柏陽町１－２５－８"},{"name":"札幌みづほ","phone":"080-9893-0615","postal":"007-0882","address":"北海道札幌市東区北丘珠２条２－１１－１６"},{"name":"平和","phone":"080-9893-0616","postal":"063-0021","address":"北海道札幌市西区平和１条７丁目２番８号"},{"name":"室蘭港南","phone":"080-9893-0617","postal":"051-0032","address":"北海道室蘭市港南町二丁目１３番２０号"},{"name":"登別桜木","phone":"080-9893-0618","postal":"059-0023","address":"北海道登別市桜木町３丁目１３番地２"},{"name":"江別工業団地","phone":"080-9893-0619","postal":"067-0051","address":"北海道江別市工栄町１５番地の１"},{"name":"苫小牧シーアイ団地","phone":"080-9893-0620","postal":"053-0842","address":"北海道苫小牧市有珠の沢町４－２０－３５"},{"name":"手稲星置","phone":"080-9893-0257","postal":"006-0852","address":"北海道札幌市手稲区星置２条７丁目４番５号"},{"name":"静内山手","phone":"080-9891-1996","postal":"056-0024","address":"北海道日高郡新ひだか町静内山手町3丁目5番15号"},{"name":"豊畑","phone":"080-9893-0623","postal":"056-0143","address":"北海道日高郡新ひだか町静内豊畑１３５－２"},{"name":"札幌石山東","phone":"080-9893-0624","postal":"005-0850","address":"北海道札幌市南区石山東４－８－３８"},{"name":"歌島","phone":"080-9893-0625","postal":"048-0602","address":"北海道島牧郡島牧村字歌島３５０－２"},{"name":"美谷","phone":"080-9893-0626","postal":"048-0415","address":"北海道寿都郡寿都町字歌棄町美谷１５６番地１"},{"name":"カルルス温泉","phone":"080-9893-0628","postal":"059-0553","address":"北海道登別市カルルス町４番地"},{"name":"豊郷","phone":"080-9893-0629","postal":"059-2126","address":"北海道沙流郡日高町字豊郷４５０番地の１"},{"name":"稲里","phone":"080-9893-0630","postal":"054-0201","address":"北海道勇払郡むかわ町穂別稲里４１７番地１"},{"name":"三ノ原","phone":"080-9893-0631","postal":"048-1723","address":"北海道虻田郡留寿都村字三ノ原１９番地"},{"name":"然別","phone":"080-9893-0632","postal":"048-2403","address":"北海道余市郡仁木町然別１０４番地"},{"name":"湯別","phone":"080-9895-1050","postal":"048-0414","address":"北海道寿都郡寿都町字湯別町上湯別１０３－１"},{"name":"ニセコ元町","phone":"080-9893-0634","postal":"048-1544","address":"北海道虻田郡ニセコ町字元町２１４番地"},{"name":"石狩本町","phone":"080-9893-0635","postal":"061-3377","address":"北海道石狩市親船町１０７番地"},{"name":"中恵庭","phone":"080-9893-0636","postal":"061-1404","address":"北海道恵庭市上山口２８"},{"name":"泉郷","phone":"080-9893-0637","postal":"066-0004","address":"北海道千歳市泉郷３８２－５"},{"name":"庫富","phone":"080-9893-0638","postal":"059-2124","address":"北海道沙流郡日高町字庫富２７５－１"},{"name":"原歌","phone":"080-9893-0640","postal":"048-0633","address":"北海道島牧郡島牧村字原歌町８９"},{"name":"樽岸","phone":"080-9893-0641","postal":"048-0413","address":"北海道寿都郡寿都町字樽岸町樽岸２０番地１"},{"name":"愛国","phone":"080-9893-0642","postal":"089-1181","address":"北海道帯広市愛国町基線４１番地"},{"name":"富村牛","phone":"080-9893-0643","postal":"081-0154","address":"北海道上川郡新得町字屈足トムラウシ３３７番地"},{"name":"旭浜","phone":"080-9893-0644","postal":"089-2121","address":"北海道広尾郡大樹町字旭浜１０２番地１６"},{"name":"大樹駅前","phone":"080-9893-0645","postal":"089-2152","address":"北海道広尾郡大樹町西本通３３番地２"},{"name":"幸福","phone":"080-9893-0646","postal":"089-1246","address":"北海道帯広市幸福町東１線１６３番地９"},{"name":"音更北","phone":"080-9893-0647","postal":"080-0101","address":"北海道河東郡音更町大通１－５"},{"name":"帯広西二十一条","phone":"080-9893-0648","postal":"080-2471","address":"北海道帯広市西２１条南２－４４－２２"},{"name":"広尾本通","phone":"080-9893-0649","postal":"089-2615","address":"北海道広尾郡広尾町本通５丁目１番地１"},{"name":"音更柳町","phone":"080-9893-0650","postal":"080-0122","address":"北海道河東郡音更町柳町仲区１５"},{"name":"帯広西十八条","phone":"080-9893-0651","postal":"080-0028","address":"北海道帯広市西１８条南５－３６－２"},{"name":"帯広西七条","phone":"080-9893-0652","postal":"080-0017","address":"北海道帯広市西７条南２７－２９－１１"},{"name":"足寄本通","phone":"080-9893-0653","postal":"089-3716","address":"北海道足寄郡足寄町南６条１－３"},{"name":"芽室麻生","phone":"080-9893-0655","postal":"082-0054","address":"北海道河西郡芽室町東４条南１－３"},{"name":"上然別","phone":"080-9893-0656","postal":"080-0575","address":"北海道河東郡音更町字上然別西６線１０２"},{"name":"十弗","phone":"080-9893-0658","postal":"089-5243","address":"北海道中川郡豊頃町十弗宝町３９"},{"name":"万年","phone":"080-9893-0659","postal":"080-0344","address":"北海道河東郡音更町字万年基線５３"},{"name":"萩ヶ岡","phone":"080-9893-0660","postal":"080-1408","address":"北海道河東郡上士幌町字上士幌東３線２８８番地２９"},{"name":"二宮","phone":"080-9893-0661","postal":"089-5309","address":"北海道中川郡豊頃町二宮2460-1"},{"name":"常室","phone":"080-9893-0662","postal":"089-5633","address":"北海道十勝郡浦幌町字常室４９－５"},{"name":"銀河線本別駅内","phone":"080-9893-0663","postal":"089-3334","address":"北海道中川郡本別町北３丁目１番地１"},{"name":"十勝栄","phone":"080-9893-0664","postal":"080-0272","address":"北海道河東郡音更町字下士幌北５線東４３"},{"name":"東瓜幕","phone":"080-9893-0665","postal":"081-0346","address":"北海道河東郡鹿追町東瓜幕西１６線２５－４"},{"name":"斗満","phone":"080-9893-0666","postal":"089-4300","address":"北海道足寄郡陸別町字トマム南３線９０－５"},{"name":"生花","phone":"080-9893-0047","postal":"089-1881","address":"北海道広尾郡大樹町字生花５２８番地１"},{"name":"火散布","phone":"080-9893-0667","postal":"088-1536","address":"北海道厚岸郡浜中町火散布１８８"},{"name":"縫別","phone":"080-9893-0668","postal":"088-0342","address":"北海道白糠郡白糠町茶路基線１９０"},{"name":"中足寄","phone":"080-9893-0669","postal":"089-3723","address":"北海道足寄郡足寄町中足寄７４番地"},{"name":"門静","phone":"080-9893-0670","postal":"088-1126","address":"北海道厚岸郡厚岸町門静２－６２"},{"name":"久著呂","phone":"080-9893-0671","postal":"088-2381","address":"北海道川上郡標茶町字中久著呂市街地中通１１番地２"},{"name":"上オソツベツ","phone":"080-9893-0672","postal":"088-2333","address":"北海道川上郡標茶町字上オソツベツ原野基線４４－７"},{"name":"北進","phone":"080-9893-0673","postal":"088-0343","address":"北海道白糠郡白糠町上茶路基線１５０－２４"},{"name":"川湯駅前","phone":"080-9897-0190","postal":"088-3462","address":"北海道川上郡弟子屈町川湯駅前二丁目４番１号"},{"name":"白糠幸","phone":"080-9893-0675","postal":"088-0321","address":"北海道白糠郡白糠町西１条北６－１－２６"},{"name":"白糠橋北","phone":"080-9893-0676","postal":"088-0323","address":"北海道白糠郡白糠町西４条北１－４－７"},{"name":"天寧","phone":"080-9893-0677","postal":"088-0606","address":"北海道釧路郡釧路町中央９－３６"},{"name":"上足寄","phone":"080-5949-3851","postal":"089-3962","address":"北海道足寄郡足寄町上足寄本町6番地15"},{"name":"糸魚沢","phone":"080-9893-0679","postal":"088-1101","address":"北海道厚岸郡厚岸町糸魚沢５３"},{"name":"茶路","phone":"080-9893-0681","postal":"088-0342","address":"北海道白糠郡白糠町茶路基線１２１－１"},{"name":"仁々志別","phone":"070-8717-8142","postal":"085-0201","address":"北海道釧路市阿寒町仁々志別３２線８９番地３"},{"name":"阿歴内","phone":"080-9893-0683","postal":"088-2272","address":"北海道川上郡標茶町字阿歴内原野基線１３６－１"},{"name":"上武佐","phone":"080-9893-0684","postal":"086-1271","address":"北海道標津郡中標津町字武佐１３６５－４"},{"name":"岬町","phone":"080-9893-0685","postal":"086-1814","address":"北海道目梨郡羅臼町岬町２３番１号"},{"name":"豊原","phone":"080-9893-0686","postal":"086-0657","address":"北海道野付郡別海町豊原１７番地の１４"},{"name":"根室峯浜","phone":"080-9893-0687","postal":"086-1751","address":"北海道目梨郡羅臼町峯浜町３９－６"},{"name":"標津忠類","phone":"080-9893-0688","postal":"086-1601","address":"北海道標津郡標津町字忠類４０番地１"},{"name":"根室曙","phone":"080-9893-0689","postal":"087-0006","address":"北海道根室市曙町２丁目５番地"},{"name":"光洋","phone":"080-9893-0690","postal":"087-0004","address":"北海道根室市光洋町２－１５－７"},{"name":"西竹","phone":"080-9893-0691","postal":"086-2685","address":"北海道標津郡中標津町字西竹３６０番地２"},{"name":"中標津西七条","phone":"080-9893-0692","postal":"086-1127","address":"北海道標津郡中標津町西７条北４－１－７"},{"name":"中標津西町","phone":"080-9893-0693","postal":"086-1157","address":"北海道標津郡中標津町西町３丁目８番地"},{"name":"和田","phone":"080-9893-0694","postal":"087-0033","address":"北海道根室市西和田８１５"},{"name":"中標津東十二条","phone":"080-9893-0695","postal":"086-1012","address":"北海道標津郡中標津町東１２条南９丁目１６番地"},{"name":"温根沼","phone":"080-9893-0696","postal":"087-0035","address":"北海道根室市温根沼５３番地"},{"name":"古多糠","phone":"080-9893-0697","postal":"086-1731","address":"北海道標津郡標津町字古多糠２１４４番地５"},{"name":"武佐","phone":"080-9893-0698","postal":"086-1271","address":"北海道標津郡中標津町字武佐１６線８５番地"},{"name":"森越","phone":"080-9893-0699","postal":"049-1102","address":"北海道上磯郡知内町字森越２番地６"},{"name":"千軒","phone":"080-9893-0700","postal":"049-1332","address":"北海道松前郡福島町字千軒３６２番地の４"},{"name":"上ノ国勝山","phone":"080-9893-0701","postal":"049-0612","address":"北海道檜山郡上ノ国町字上ノ国９０"},{"name":"白符","phone":"080-9893-0702","postal":"049-1301","address":"北海道松前郡福島町字白符１５７番地"},{"name":"鍛神","phone":"080-9893-0703","postal":"041-0852","address":"北海道函館市鍛治２丁目２４番１１号"},{"name":"軍川","phone":"080-9893-0704","postal":"041-1353","address":"北海道亀田郡七飯町字上軍川４３２番地４"},{"name":"双見","phone":"080-9893-0707","postal":"041-1623","address":"北海道函館市双見町１４３－１"},{"name":"渡島昭和","phone":"080-9893-0708","postal":"041-0812","address":"北海道函館市昭和４丁目３０番１３号"},{"name":"古川","phone":"080-9893-0709","postal":"041-0262","address":"北海道函館市古川町６３番地１"},{"name":"日浦","phone":"080-9893-0710","postal":"041-0401","address":"北海道函館市日浦町９５番地"},{"name":"札前","phone":"080-9893-0711","postal":"049-1642","address":"北海道松前郡松前町字札前２０７番地"},{"name":"峠下","phone":"080-9893-0712","postal":"041-1102","address":"北海道亀田郡七飯町字峠下７８－９"},{"name":"茂無部","phone":"080-9893-0713","postal":"049-2563","address":"北海道二海郡八雲町栄浜３８"},{"name":"江差南浜","phone":"080-9893-0715","postal":"043-0063","address":"北海道檜山郡江差町南浜町２０５"},{"name":"小黒部","phone":"080-9893-0716","postal":"043-0014","address":"北海道檜山郡江差町字小黒部町１２５"},{"name":"釜谷","phone":"080-9893-0718","postal":"049-0403","address":"北海道上磯郡木古内町字釜谷９５番地４"},{"name":"汐吹","phone":"080-9893-0720","postal":"049-0608","address":"北海道檜山郡上ノ国町汐吹３４３"},{"name":"函館釜谷","phone":"080-9890-9083","postal":"041-0252","address":"北海道函館市釜谷町４９番１"},{"name":"松浦","phone":"080-9893-0722","postal":"049-1455","address":"北海道松前郡福島町字吉野７６番地の１"},{"name":"緑町","phone":"080-9893-0723","postal":"041-1135","address":"北海道亀田郡七飯町緑町２丁目８番２２号"},{"name":"富士見町","phone":"080-9893-0724","postal":"049-2322","address":"北海道茅部郡森町字富士見町１０３－１"},{"name":"鹿部本別","phone":"080-9893-0725","postal":"041-1404","address":"北海道茅部郡鹿部町字本別１３６"},{"name":"知内駅前","phone":"080-9893-0726","postal":"049-1103","address":"北海道上磯郡知内町字重内６６番地９３"},{"name":"大澗","phone":"080-9893-0727","postal":"041-0403","address":"北海道函館市大澗町２７"},{"name":"木間内","phone":"080-9893-0728","postal":"043-1234","address":"北海道檜山郡厚沢部町字木間内２２３"},{"name":"七重浜本通","phone":"080-9893-0729","postal":"049-0111","address":"北海道北斗市七重浜２丁目４５番４号"},{"name":"大磯","phone":"080-5947-7411","postal":"049-1503","address":"北海道松前郡松前町字大磯2番地"},{"name":"函館流通センター内","phone":"080-9893-0731","postal":"041-0824","address":"北海道函館市西桔梗町５８９番地の２８３"},{"name":"七飯大川","phone":"080-9893-0732","postal":"041-1122","address":"北海道亀田郡七飯町大川１－３－１１"},{"name":"汐首","phone":"080-9893-0733","postal":"041-0301","address":"北海道函館市汐首町６９"},{"name":"函館大学内","phone":"080-9893-0735","postal":"042-0955","address":"北海道函館市高丘町５１番１号"},{"name":"北斗市役所内","phone":"080-9893-1705","postal":"049-0162","address":"北海道北斗市中央１－３－１０"},{"name":"松江","phone":"080-9893-0737","postal":"043-1523","address":"北海道奥尻郡奥尻町字松江２２３番地"},{"name":"宮津","phone":"080-9893-0738","postal":"043-1403","address":"北海道奥尻郡奥尻町字球浦１４２番地１"},{"name":"光珠内","phone":"080-9893-0740","postal":"079-0162","address":"北海道美唄市字カ－ウシュナイ３４２番地８（光珠内町北）"},{"name":"広里","phone":"080-9893-0741","postal":"074-1271","address":"北海道深川市広里町３－２－８１"},{"name":"老節布","phone":"080-9893-0742","postal":"076-0203","address":"北海道富良野市字老節布南２線３番地２号地"},{"name":"美唄東","phone":"080-9893-0743","postal":"072-0015","address":"北海道美唄市東４条南１丁目３番５号"},{"name":"向ヶ丘","phone":"080-9893-0744","postal":"079-0303","address":"北海道空知郡奈井江町字奈井江１２３２－６"},{"name":"空知太","phone":"080-9893-0745","postal":"073-0101","address":"北海道砂川市空知太東１条２丁目３７５番９"},{"name":"愛別駅前","phone":"080-9893-0746","postal":"078-1402","address":"北海道上川郡愛別町字東町２２２－５"},{"name":"東聖","phone":"090-6724-8712","postal":"071-1521","address":"北海道上川郡東神楽町ひじり野北１条１丁目１番６号"},{"name":"深川西","phone":"080-9893-0748","postal":"074-0003","address":"北海道深川市３条１番２７号"},{"name":"文京","phone":"080-9893-0749","postal":"079-1122","address":"北海道赤平市西文京町４丁目１番地１３"},{"name":"奈井江東町","phone":"080-9893-0750","postal":"079-0306","address":"北海道空知郡奈井江町字奈井江７４８番地５３"},{"name":"鷹栖北成","phone":"080-9893-0751","postal":"071-1262","address":"北海道上川郡鷹栖町２２線１５－６"},{"name":"白金温泉","phone":"080-9893-0752","postal":"071-0235","address":"北海道上川郡美瑛町字白金"},{"name":"石狩共栄","phone":"080-9893-0753","postal":"071-8160","address":"北海道旭川市東鷹栖１０線１５号２８８７－７"},{"name":"岩見沢春日","phone":"080-9893-0754","postal":"068-0827","address":"北海道岩見沢市春日町１－８－１６"},{"name":"聖和","phone":"080-9893-0755","postal":"071-0181","address":"北海道旭川市西神楽１線１８号３９３－１"},{"name":"万字仲町","phone":"080-9893-0756","postal":"068-3153","address":"北海道岩見沢市栗沢町万字仲町１２９－３"},{"name":"栗沢本町","phone":"080-9893-0758","postal":"068-0127","address":"北海道岩見沢市栗沢町本町３４"},{"name":"美唄大通南","phone":"080-9893-0761","postal":"072-0011","address":"北海道美唄市大通東１条南５丁目４番２３号"},{"name":"日東","phone":"080-9893-0763","postal":"079-0264","address":"北海道美唄市字チャシュナイ１０２０番地３６"},{"name":"南吉野","phone":"080-9893-0764","postal":"073-0121","address":"北海道砂川市吉野１条南５丁目３６番地８６"},{"name":"深川曙","phone":"080-9893-0765","postal":"074-0031","address":"北海道深川市あけぼの町９－８"},{"name":"北の峰","phone":"080-9893-0766","postal":"076-0034","address":"北海道富良野市北の峰町３３番３４号"},{"name":"上芦別なまこ山","phone":"080-5947-3392","postal":"079-1371","address":"北海道芦別市上芦別町７９番地７"},{"name":"岩見沢北三条","phone":"080-9893-0768","postal":"068-0043","address":"北海道岩見沢市北３条西１７丁目１番２号"},{"name":"富良野麻町","phone":"080-9893-0769","postal":"076-0055","address":"北海道富良野市西麻町２－２５"},{"name":"母子里","phone":"080-9893-0770","postal":"074-0741","address":"北海道雨竜郡幌加内町字母子里８４１２番地の１"},{"name":"岩見沢朝日","phone":"080-9893-0771","postal":"068-3185","address":"北海道岩見沢市朝日町１７６－２２"},{"name":"岩見沢くぴど","phone":"080-9893-0772","postal":"068-0833","address":"北海道岩見沢市志文町３０１"},{"name":"旭川医大病院内","phone":"080-9893-0774","postal":"078-8510","address":"北海道旭川市緑が丘東２条１丁目１番１号旭川医科大学病院構内"},{"name":"胆振苫鵡","phone":"080-9893-0775","postal":"079-2205","address":"北海道勇払郡占冠村字上トマム"},{"name":"幌成","phone":"080-9893-0776","postal":"074-0145","address":"北海道深川市幌内１６６番地"},{"name":"旭川流通団地","phone":"080-9893-0777","postal":"079-8442","address":"北海道旭川市流通団地２条３－４１"},{"name":"置杵牛","phone":"080-9893-0778","postal":"071-0234","address":"北海道上川郡美瑛町字置杵牛上精美"},{"name":"芦別渓水","phone":"080-9893-0779","postal":"075-0006","address":"北海道芦別市北６条西３丁目１２番地６"},{"name":"下金山","phone":"080-9893-0780","postal":"079-2132","address":"北海道空知郡南富良野町字下金山８１４番地"},{"name":"宇莫別","phone":"080-9893-0781","postal":"071-0226","address":"北海道上川郡美瑛町字下宇莫別１５５－６"},{"name":"蘭留","phone":"080-9893-0782","postal":"078-0329","address":"北海道上川郡比布町北９線１４"},{"name":"稲田","phone":"080-9893-0783","postal":"074-1276","address":"北海道深川市音江町字稲田５０７番地"},{"name":"政和","phone":"080-9893-0784","postal":"074-0426","address":"北海道雨竜郡幌加内町字政和第二"},{"name":"北竜","phone":"080-9893-0785","postal":"078-2223","address":"北海道雨竜郡沼田町字北竜４５０"},{"name":"神居古潭","phone":"080-9893-0786","postal":"078-0185","address":"北海道旭川市神居町神居古潭４４－３"},{"name":"沼牛","phone":"080-9893-0787","postal":"074-0403","address":"北海道雨竜郡幌加内町下幌加内６６２０－３"},{"name":"上美唄","phone":"080-9893-0788","postal":"072-0051","address":"北海道美唄市上美唄町２区"},{"name":"下士別","phone":"080-9893-0789","postal":"095-0061","address":"北海道士別市下士別町４２線西３"},{"name":"武徳","phone":"080-9893-0790","postal":"095-0062","address":"北海道士別市武徳町４４線東７号５９３番地１１"},{"name":"臼谷","phone":"080-9893-0791","postal":"078-3302","address":"北海道留萌郡小平町字臼谷５１番地"},{"name":"箸別","phone":"080-9893-0792","postal":"077-0207","address":"北海道増毛郡増毛町箸別９９－１"},{"name":"士別東","phone":"080-9893-0793","postal":"095-0004","address":"北海道士別市東４条北６丁目１３番地"},{"name":"羽幌北大通","phone":"080-9893-0794","postal":"078-4110","address":"北海道苫前郡羽幌町北大通２丁目１２番地１"},{"name":"風連旭","phone":"080-9893-0796","postal":"098-0514","address":"北海道名寄市風連町字旭２２１６番地"},{"name":"川南","phone":"080-9893-0797","postal":"095-0371","address":"北海道士別市上士別町２０線南２９"},{"name":"中和","phone":"080-9893-0798","postal":"098-0122","address":"北海道上川郡和寒町字中和１１４４"},{"name":"仁宇布","phone":"080-9893-0799","postal":"098-2208","address":"北海道中川郡美深町字仁宇布２０７－４"},{"name":"礼受","phone":"080-9893-0800","postal":"077-0035","address":"北海道留萌市礼受町２６番地の１３"},{"name":"富武士","phone":"080-9893-0801","postal":"093-0594","address":"北海道常呂郡佐呂間町字富武士番外地"},{"name":"風烈布","phone":"080-9893-0802","postal":"098-5953","address":"北海道枝幸郡枝幸町風烈布５２７２番地２"},{"name":"神居滝","phone":"080-9893-0803","postal":"099-0213","address":"北海道紋別郡遠軽町丸瀬布上武利１８０－２"},{"name":"登栄床","phone":"080-9893-0805","postal":"099-6412","address":"北海道紋別郡湧別町登栄床１５４－３"},{"name":"北見日の出","phone":"080-9893-0807","postal":"099-1401","address":"北海道常呂郡訓子府町字日出２８－８３日ノ出地区ふれあいセンタ－内"},{"name":"若里","phone":"080-9893-0808","postal":"093-0532","address":"北海道常呂郡佐呂間町字若里５００番３"},{"name":"湧別錦町","phone":"080-9893-0809","postal":"099-6414","address":"北海道紋別郡湧別町錦町２７９番地１"},{"name":"留辺蘂栄町","phone":"080-9893-0811","postal":"091-0033","address":"北海道北見市留辺蘂町栄町５番地２"},{"name":"二ツ岩","phone":"080-5948-4684","postal":"093-0086","address":"北海道網走市二ツ岩141番地4"},{"name":"北見花園","phone":"080-9893-0813","postal":"090-0816","address":"北海道北見市花園町３４番地１８"},{"name":"桂町","phone":"080-9895-0967","postal":"093-0041","address":"北海道網走市桂町３丁目４番３号"},{"name":"遠軽西町","phone":"080-9893-0815","postal":"099-0428","address":"北海道紋別郡遠軽町西町２丁目３番地１０５"},{"name":"元稲府","phone":"080-9893-0816","postal":"098-1702","address":"北海道紋別郡雄武町字雄武１８４０－５３"},{"name":"北見オニオン通","phone":"080-9893-0817","postal":"090-0807","address":"北海道北見市川東３６２番地"},{"name":"稲美","phone":"080-9893-0820","postal":"092-0027","address":"北海道網走郡美幌町字稲美９０－９９"},{"name":"津別豊永","phone":"080-9893-0821","postal":"092-0224","address":"北海道網走郡津別町字豊永５１－８"},{"name":"稚内ノシャップ","phone":"080-9895-0570","postal":"097-0026","address":"北海道稚内市ノシャップ二丁目一番三号"},{"name":"遠軽豊里","phone":"080-9893-0823","postal":"099-0412","address":"北海道紋別郡遠軽町豊里２５７番地の３"},{"name":"網走つくしヶ丘","phone":"080-9893-0824","postal":"093-0034","address":"北海道網走市つくしケ丘４－８－５"},{"name":"紋別緑町","phone":"080-9893-0825","postal":"094-0014","address":"北海道紋別市緑町４丁目１７番２１号"},{"name":"稚内富岡","phone":"080-9893-0826","postal":"097-0012","address":"北海道稚内市富岡２－１６－４"},{"name":"稚内緑","phone":"080-9893-0827","postal":"097-0004","address":"北海道稚内市緑３－３－９"},{"name":"北見三輪","phone":"080-9893-0828","postal":"090-0837","address":"北海道北見市中央三輪１丁目４２１番地２６"},{"name":"留辺蘂旭","phone":"080-9893-0829","postal":"091-0026","address":"北海道北見市留辺蘂町旭公園９５番地４"},{"name":"紋別落石","phone":"080-9893-0830","postal":"094-0007","address":"北海道紋別市落石町４丁目３２番４０号"},{"name":"遠軽社名渕","phone":"","postal":"099-0426","address":"北海道紋別郡遠軽町社名淵６２－１"},{"name":"北見秋田","phone":"080-9893-0833","postal":"099-1364","address":"北海道常呂郡置戸町字秋田２８１－１９"},{"name":"網走潮見","phone":"080-9893-0834","postal":"093-0042","address":"北海道網走市潮見４丁目１１３番地１"},{"name":"上仁頃","phone":"080-9893-0836","postal":"090-0006","address":"北海道北見市上仁頃１０３"},{"name":"活汲","phone":"080-9893-0837","postal":"092-0206","address":"北海道網走郡津別町活汲２９６－２"},{"name":"日吉","phone":"080-9893-0839","postal":"093-0334","address":"北海道北見市常呂町字日吉２０９番地３"},{"name":"稚内富磯","phone":"080-9893-0840","postal":"098-6756","address":"北海道稚内市大字宗谷村字富磯１６４番地６"},{"name":"藻別","phone":"080-9893-0842","postal":"094-0024","address":"北海道紋別市藻別６３０－１"},{"name":"中渚滑","phone":"080-9893-0843","postal":"099-5352","address":"北海道紋別市上渚滑町中渚滑１４１番２"},{"name":"朱円","phone":"080-9893-0844","postal":"099-4124","address":"北海道斜里郡斜里町朱円３４－１３"},{"name":"瑞穂","phone":"080-9893-0845","postal":"091-0017","address":"北海道北見市留辺蘂町瑞穂３０"},{"name":"稚内曲渕","phone":"080-9893-0846","postal":"098-6571","address":"北海道稚内市大字声問村字曲淵１４１２番地１"}];
+
+// ════════════════════════════════════════
+//  座標キャッシュ（fetch_tool.htmlで取得後ここに貼り付け）
+// ════════════════════════════════════════
+// === COORDS_CACHE_PLACEHOLDER ===
+const COORDS_CACHE = {
+  "日高泉":[42.605625,142.573517],
+  "石狩滝ノ上":[42.903469,142.0047],
+  "仲洞爺":[42.624943,140.928513],
+  "入江":[42.54034,140.771072],
+  "太陽":[42.554226,142.466537],
+  "藤野沢":[42.961082,141.306686],
+  "日高朝日":[42.403912,142.353821],
+  "豊幌":[43.134048,141.625519],
+  "西幌別":[42.159107,142.837814],
+  "六郷":[42.904449,140.767914],
+  "発寒":[43.111134,141.267792],
+  "岩内大浜":[42.986816,140.525467],
+  "舞鶴":[42.956734,141.675781],
+  "ニセコ駅前":[42.808098,140.68576],
+  "後志豊浜":[42.72921,140.080582],
+  "江別太":[43.112244,141.569641],
+  "後志港町":[42.88031,140.383148],
+  "浦河東町":[42.158367,142.787659],
+  "樽前":[42.591728,141.433441],
+  "島牧元町":[42.675484,139.993561],
+  "舟岡":[42.462185,140.874298],
+  "オタモイ":[43.220261,140.958405],
+  "農業試験場前":[43.030655,141.733795],
+  "西山手":[42.632259,141.565521],
+  "東野幌":[43.092396,141.538055],
+  "共和":[42.942657,140.607819],
+  "島牧栄浜":[42.677555,139.915161],
+  "東米里":[43.08173,141.444427],
+  "手稲稲穂中":[43.124134,141.224365],
+  "石狩大曲":[42.970566,141.477997],
+  "岩内東山":[42.983513,140.529617],
+  "円山西町":[43.043808,141.305908],
+  "富岸":[42.372276,141.065567],
+  "札幌荒井山":[43.05069,141.298447],
+  "上江別":[43.106117,141.555984],
+  "静内青柳":[42.337601,142.373398],
+  "白石川北":[43.058182,141.4375],
+  "平取二風谷":[42.635429,142.178391],
+  "北湯沢":[42.638203,140.995438],
+  "白老栄町":[42.551922,141.350433],
+  "白石北郷八条":[43.065517,141.425064],
+  "恵庭柏陽":[42.898212,141.570282],
+  "札幌みづほ":[43.125221,141.406494],
+  "平和":[43.0583,141.251175],
+  "室蘭港南":[42.3297,140.95166],
+  "登別桜木":[42.407631,141.090118],
+  "江別工業団地":[43.121788,141.51564],
+  "苫小牧シーアイ団地":[42.643524,141.552124],
+  "手稲星置":[43.136299,141.199173],
+  "静内山手":[42.345966,142.360825],
+  "豊畑":[42.389015,142.503632],
+  "札幌石山東":[42.962177,141.343338],
+  "歌島":[42.784821,140.156036],
+  "美谷":[42.798264,140.327271],
+  "カルルス温泉":[42.532166,141.095795],
+  "豊郷":[42.523853,142.214951],
+  "稲里":[42.852165,142.160675],
+  "三ノ原":[42.693192,140.833435],
+  "然別":[43.12392,140.699982],
+  "湯別":[42.791054,140.228821],
+  "ニセコ元町":[42.797264,140.705185],
+  "石狩本町":[43.235241,141.341064],
+  "中恵庭":[42.905689,141.60585],
+  "泉郷":[42.908234,141.716888],
+  "庫富":[42.531639,142.164246],
+  "原歌":[42.683037,139.981842],
+  "樽岸":[42.75074,140.254272],
+  "愛国":[42.83707,143.192856],
+  "富村牛":[43.341362,142.968384],
+  "旭浜":[42.433914,143.396927],
+  "大樹駅前":[42.490936,143.273895],
+  "幸福":[42.745949,143.161148],
+  "音更北":[43.002171,143.195831],
+  "帯広西二十一条":[42.919697,143.139145],
+  "広尾本通":[42.286129,143.316986],
+  "音更柳町":[42.970676,143.21405],
+  "帯広西十八条":[42.90807,143.165085],
+  "帯広西七条":[42.900364,143.196243],
+  "足寄本通":[43.237785,143.546524],
+  "芽室麻生":[42.909527,143.055466],
+  "上然別":[43.044258,143.086319],
+  "十弗":[42.854874,143.503601],
+  "万年":[43.012337,143.13179],
+  "萩ヶ岡":[43.261906,143.30162],
+  "二宮":[42.73703,143.414703],
+  "常室":[42.874313,143.691986],
+  "銀河線本別駅内":[43.125095,143.61322],
+  "十勝栄":[42.960407,143.231064],
+  "東瓜幕":[43.173199,143.108551],
+  "斗満":[43.478287,143.631714],
+  "生花":[42.613152,143.429901],
+  "火散布":[43.047787,145.00676],
+  "縫別":[43.02354,144.018799],
+  "中足寄":[43.288044,143.621506],
+  "門静":[43.057426,144.788773],
+  "久著呂":[43.281776,144.373962],
+  "上オソツベツ":[43.369518,144.419617],
+  "北進":[43.118298,143.896027],
+  "川湯駅前":[43.616791,144.456345],
+  "白糠幸":[42.964405,144.071136],
+  "白糠橋北":[42.957626,144.060898],
+  "天寧":[43.014969,144.442047],
+  "上足寄":[43.3568,143.786804],
+  "糸魚沢":[43.122772,144.943344],
+  "茶路":[43.02354,144.018799],
+  "仁々志別":[43.173298,144.225906],
+  "阿歴内":[43.093731,144.631882],
+  "上武佐":[43.646194,144.920303],
+  "岬町":[44.102413,145.238846],
+  "豊原":[43.432495,145.015182],
+  "根室峯浜":[43.883194,145.070648],
+  "標津忠類":[43.710957,145.078781],
+  "根室曙":[43.332394,145.595337],
+  "光洋":[43.318687,145.59819],
+  "西竹":[43.588451,144.746017],
+  "中標津西七条":[43.54652,144.964432],
+  "中標津西町":[43.554466,144.957993],
+  "和田":[43.25584,145.531616],
+  "中標津東十二条":[43.548569,144.99054],
+  "温根沼":[43.27401,145.504456],
+  "古多糠":[43.762989,144.929825],
+  "武佐":[43.646194,144.920303],
+  "森越":[41.63065,140.399078],
+  "千軒":[41.575722,140.211304],
+  "上ノ国勝山":[41.802895,140.108612],
+  "白符":[41.473038,140.216187],
+  "鍛神":[41.809425,140.764725],
+  "軍川":[41.963608,140.713669],
+  "双見":[41.979,140.897964],
+  "渡島昭和":[41.818642,140.733673],
+  "古川":[41.757919,140.86499],
+  "日浦":[41.744698,141.042633],
+  "札前":[41.470135,140.046127],
+  "峠下":[41.93623,140.655807],
+  "茂無部":[42.175774,140.45372],
+  "江差南浜":[41.850052,140.127029],
+  "小黒部":[41.951481,140.228592],
+  "釜谷":[41.728985,140.52829],
+  "汐吹":[41.732765,140.054123],
+  "函館釜谷":[41.741318,140.941376],
+  "松浦":[41.433041,140.214798],
+  "緑町":[41.882969,140.688065],
+  "富士見町":[42.106098,140.546509],
+  "鹿部本別":[42.063019,140.740372],
+  "知内駅前":[41.614635,140.383347],
+  "大澗":[41.750893,141.069427],
+  "木間内":[41.937794,140.37796],
+  "七重浜本通":[41.816326,140.703873],
+  "大磯":[41.426342,140.094635],
+  "函館流通センター内":[41.831169,140.71756],
+  "七飯大川":[41.855618,140.719833],
+  "汐首":[41.722301,140.957199],
+  "函館大学内":[41.78883,140.806671],
+  "北斗市役所内":[41.823097,140.652939],
+  "松江":[42.095013,139.485901],
+  "宮津":[42.194416,139.508713],
+  "光珠内":[43.332912,141.853806],
+  "広里":[43.710636,142.049927],
+  "老節布":[43.235863,142.472931],
+  "美唄東":[43.329517,141.870132],
+  "向ヶ丘":[43.443069,141.918442],
+  "空知太":[43.528648,141.918686],
+  "愛別駅前":[43.900993,142.582962],
+  "東聖":[43.719109,142.41716],
+  "深川西":[43.715561,142.031555],
+  "文京":[43.564636,142.042068],
+  "奈井江東町":[43.442238,141.892639],
+  "鷹栖北成":[43.911259,142.337082],
+  "白金温泉":[43.472809,142.643753],
+  "石狩共栄":[43.87442,142.401077],
+  "岩見沢春日":[43.189911,141.771683],
+  "聖和":[43.66571,142.404709],
+  "万字仲町":[43.144333,141.983368],
+  "栗沢本町":[43.119392,141.740173],
+  "美唄大通南":[43.325165,141.858521],
+  "日東":[43.332912,141.853806],
+  "南吉野":[43.484413,141.914047],
+  "深川曙":[43.744705,142.035828],
+  "北の峰":[43.344204,142.370132],
+  "上芦別なまこ山":[43.496445,142.204758],
+  "岩見沢北三条":[43.201725,141.745514],
+  "富良野麻町":[43.344734,142.398331],
+  "母子里":[44.361607,142.2686],
+  "岩見沢朝日":[43.170361,141.876846],
+  "岩見沢くぴど":[43.165241,141.758209],
+  "旭川医大病院内":[43.730633,142.381897],
+  "胆振苫鵡":[43.012558,142.676422],
+  "幌成":[43.857861,142.11879],
+  "旭川流通団地":[43.797337,142.401596],
+  "置杵牛":[43.558365,142.583145],
+  "芦別渓水":[43.530514,142.177032],
+  "下金山":[43.179222,142.416214],
+  "宇莫別":[43.61607,142.483032],
+  "蘭留":[43.9263,142.475677],
+  "稲田":[43.678169,142.100189],
+  "政和":[44.135685,142.148438],
+  "北竜":[43.800014,141.892319],
+  "神居古潭":[43.72295,142.186584],
+  "沼牛":[43.945335,142.162186],
+  "上美唄":[43.335518,141.781769],
+  "下士別":[44.205505,142.393616],
+  "武徳":[44.203308,142.460464],
+  "臼谷":[44.000511,141.666534],
+  "箸別":[43.859329,141.547867],
+  "士別東":[44.186264,142.395279],
+  "羽幌北大通":[44.369774,141.707718],
+  "風連旭":[44.265259,142.462601],
+  "川南":[44.085701,142.523087],
+  "中和":[43.986206,142.375076],
+  "仁宇布":[44.531017,142.548599],
+  "礼受":[43.908173,141.621933],
+  "富武士":[44.072403,143.794449],
+  "風烈布":[44.67662,142.627853],
+  "神居滝":[43.917019,143.328995],
+  "登栄床":[44.194996,143.72699],
+  "北見日の出":[43.745495,143.79071],
+  "若里":[44.06535,143.752777],
+  "湧別錦町":[44.212147,143.606949],
+  "留辺蘂栄町":[43.784058,143.611115],
+  "二ツ岩":[44.048553,144.256165],
+  "北見花園":[43.786022,143.89212],
+  "桂町":[44.010616,144.27388],
+  "遠軽西町":[44.051876,143.507477],
+  "元稲府":[44.606403,142.939575],
+  "北見オニオン通":[43.797779,143.916855],
+  "稲美":[43.819843,144.117233],
+  "津別豊永":[43.690159,144.065384],
+  "稚内ノシャップ":[45.446823,141.648285],
+  "遠軽豊里":[44.030354,143.510468],
+  "網走つくしヶ丘":[43.993385,144.286743],
+  "紋別緑町":[44.344547,143.346298],
+  "稚内富岡":[45.390789,141.715897],
+  "稚内緑":[45.391903,141.681839],
+  "北見三輪":[43.79924,143.855133],
+  "留辺蘂旭":[43.780266,143.609879],
+  "紋別落石":[44.361279,143.335052],
+  "遠軽社名渕":[44.075935,143.457474],
+  "北見秋田":[43.728016,143.603455],
+  "網走潮見":[44.001198,144.272095],
+  "上仁頃":[43.863152,143.839813],
+  "活汲":[43.741852,144.067795],
+  "日吉":[43.985161,143.944382],
+  "稚内富磯":[45.420856,141.934738],
+  "藻別":[44.244709,143.355957],
+  "中渚滑":[44.29726,143.281906],
+  "朱円":[43.904926,144.75351],
+  "瑞穂":[43.872219,143.68483],
+  "稚内曲渕":[45.299824,141.834915]
+};
+
+// ↑ 座標取得ツール実行後、この1行をまるごと出力コードで置き換えてください
+
+
+// ════════════════════════════════════════
+//  ハザードマップタイル
+// ════════════════════════════════════════
+const HAZARD={
+  tsunami:  ['https://disaportaldata.gsi.go.jp/raster/04_tsunami_newlegend_data/{z}/{x}/{y}.png'],
+  flood:    ['https://disaportaldata.gsi.go.jp/raster/01_flood_l2_shinsuishin_data/{z}/{x}/{y}.png'],
+  landslide:['https://disaportaldata.gsi.go.jp/raster/05_dosekiryukeikaikuiki/{z}/{x}/{y}.png',
+             'https://disaportaldata.gsi.go.jp/raster/05_kyukeisyatikeikaikuiki/{z}/{x}/{y}.png',
+             'https://disaportaldata.gsi.go.jp/raster/05_jisuberikeikaikuiki/{z}/{x}/{y}.png'],
+};
+
+// ════════════════════════════════════════
+//  パスワード認証
+// ════════════════════════════════════════
+(function(){
+  const PW_HASH  = 'd1af0e46820bf4aeca7eb38afaeb260742b1c16a26130b0696cb577014320145';   // 管理者セットアップツールで設定
+  const SESSION  = 'kmapAuth';
+  const MAX_TRIES = 10;
+  let tries = parseInt(sessionStorage.getItem('kmapTries')||'0');
+
+  if(sessionStorage.getItem(SESSION)==='ok'){
+    document.getElementById('pwScreen').classList.add('gone');
+    return;
+  }
+  if(tries>=MAX_TRIES){
+    document.getElementById('pwErr').textContent='試行回数超過。ブラウザを再起動してください。';
+    document.getElementById('pwInput').disabled=true;
+    document.querySelector('.pw-btn').disabled=true;
+  }
+
+  window.checkPw=async function(){
+    if(tries>=MAX_TRIES)return;
+    const val=document.getElementById('pwInput').value;
+    const hash=await sha256(val);
+    if(hash===PW_HASH){
+      sessionStorage.setItem(SESSION,'ok');
+      sessionStorage.removeItem('kmapTries');
+      document.getElementById('pwScreen').classList.add('gone');
+    } else {
+      tries++;
+      sessionStorage.setItem('kmapTries',tries);
+      document.getElementById('pwErr').textContent='パスワードが違います。';
+      document.getElementById('pwInput').value='';
+      const rem=MAX_TRIES-tries;
+      document.getElementById('pwAttempts').textContent=rem>0?'残り'+rem+'回':'試行回数超過';
+      if(tries>=MAX_TRIES){
+        document.getElementById('pwInput').disabled=true;
+        document.querySelector('.pw-btn').disabled=true;
+      }
+    }
+  };
+
+  async function sha256(str){
+    const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(str));
+    return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+  }
+})();
+
+// ════════════════════════════════════════
+//  地図・マーカー
+// ════════════════════════════════════════
+let map, markerLayer, hazardLayers=[];
+
+window.addEventListener('load',()=>{
+  map=L.map('map',{zoomControl:true}).setView([43.5,143.0],7);
+
+  // Carto Dark Matter（無料・APIキー不要）
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
+    attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    subdomains:'abcd',maxZoom:19
+  }).addTo(map);
+
+  markerLayer=L.layerGroup().addTo(map);
+  buildList(RECORDS);
+  placeMarkers();
+});
+
+function placeMarkers(){
+  let placed=0;
+  RECORDS.forEach(r=>{
+    if(!COORDS_CACHE||!COORDS_CACHE[r.name])return;
+    const[lat,lng]=COORDS_CACHE[r.name];
+    r._pos={lat,lng};
+    addMarker(r);
+    placed++;
+  });
+  document.getElementById('badgeCount').textContent=placed+' 局';
+}
+
+const icoDefault=L.divIcon({
+  className:'',
+  html:'<div style="width:13px;height:13px;background:#00acc1;border:2px solid #fff;border-radius:50%;box-shadow:0 0 6px rgba(0,172,193,.8)"></div>',
+  iconSize:[13,13],iconAnchor:[6,6]
+});
+const icoActive=L.divIcon({
+  className:'',
+  html:'<div style="width:20px;height:20px;background:#ff7043;border:2px solid #fff;border-radius:50%;box-shadow:0 0 10px rgba(255,112,67,.9)"></div>',
+  iconSize:[20,20],iconAnchor:[10,10]
+});
+
+function addMarker(r){
+  const m=L.marker([r._pos.lat,r._pos.lng],{icon:icoDefault}).addTo(markerLayer)
+    .bindTooltip(
+      '<b>📮 '+r.name+'</b><br>'+r.address+'<br><span style="color:#00acc1">'+(r.phone||'電話番号なし')+'</span>',
+      {direction:'top',offset:[0,-8],className:'leaflet-tooltip-custom'}
+    );
+  m.on('click',()=>{
+    resetActive();
+    m.setIcon(icoActive); r._active=true; currentRec=r;
+    showCard(r);
+    document.querySelectorAll('.sb-item').forEach(e=>e.classList.remove('active'));
+    if(r._sbEl){r._sbEl.classList.add('active');r._sbEl.scrollIntoView({block:'nearest'});}
+  });
+  r._marker=m;
+}
+
+function resetActive(){
+  RECORDS.forEach(r=>{if(r._active&&r._marker){r._marker.setIcon(icoDefault);r._active=false;}});
+}
+
+let currentRec=null;
+
+function showCard(r){
+  document.getElementById('cName').textContent=r.name;
+  document.getElementById('cAddr').textContent=r.address;
+  document.getElementById('cPost').textContent='〒'+r.postal;
+  document.getElementById('cPhone').textContent=r.phone||'登録なし';
+  const c=document.getElementById('infoCard');
+  c.classList.remove('show');void c.offsetWidth;c.classList.add('show');
+}
+
+function closeCard(){
+  document.getElementById('infoCard').classList.remove('show');
+  resetActive(); currentRec=null;
+}
+
+function openOSM(){
+  if(!currentRec||!currentRec._pos)return;
+  window.open('https://www.openstreetmap.org/?mlat='+currentRec._pos.lat+'&mlon='+currentRec._pos.lng+'#map=16/'+currentRec._pos.lat+'/'+currentRec._pos.lng,'_blank');
+}
+
+// ════════════════════════════════════════
+//  サイドバー
+// ════════════════════════════════════════
+function buildList(list){
+  const el=document.getElementById('sbList');
+  el.innerHTML='';
+  if(!list.length){el.innerHTML='<div class="sb-empty">該当なし</div>';return;}
+  list.forEach(r=>{
+    const d=document.createElement('div');
+    d.className='sb-item'+(r===currentRec?' active':'');
+    d.innerHTML='<div class="iname">'+r.name+'</div><div class="iaddr">'+r.address+'</div>';
+    d.onclick=()=>{
+      if(r._marker){map.setView(r._marker.getLatLng(),14);r._marker.fire('click');}
+      closeSidebarMobile();
+    };
+    r._sbEl=d; el.appendChild(d);
+  });
+}
+
+function filterList(q){
+  buildList(RECORDS.filter(r=>r.name.includes(q)||r.address.includes(q)||r.postal.includes(q)));
+}
+
+function toggleSidebar(){
+  const sb=document.getElementById('sidebar');
+  const ov=document.getElementById('sbOverlay');
+  const isOpen=sb.classList.contains('open');
+  sb.classList.toggle('open',!isOpen);
+  ov.classList.toggle('show',!isOpen);
+}
+
+function closeSidebarMobile(){
+  if(window.innerWidth<=768){
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('sbOverlay').classList.remove('show');
+  }
+}
+
+// ════════════════════════════════════════
+//  ハザードマップ
+// ════════════════════════════════════════
+function toggleHazard(key){
+  document.querySelectorAll('.hbtn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('hbtn-'+key).classList.add('active');
+  hazardLayers.forEach(l=>map.removeLayer(l));
+  hazardLayers=[];
+
+  if(key==='none') return;
+
+  if(key==='volcano'){
+    document.getElementById('hbtn-volcano').classList.remove('active');
+    if(confirm('火山ハザードマップは国土地理院の外部サイトで確認できます。\n開きますか？')){
+      window.open('https://disaportal.gsi.go.jp/maps/index.html?code=7','_blank');
+    }
+    return;
+  }
+
+  (HAZARD[key]||[]).forEach(url=>{
+    const layer=L.tileLayer(
+      url.replace('{z}','{z}').replace('{x}','{x}').replace('{y}','{y}'),
+      {opacity:.7,maxZoom:18}
+    );
+    layer.addTo(map);
+    hazardLayers.push(layer);
+  });
+}
+</script>
+
+<style>
+.leaflet-routing-container{display:none!important;}
+</style>
+</body>
+</html>
